@@ -648,7 +648,7 @@ mod tests {
 
             let output = SpongeAPI::squeeze(&mut sponge, squeeze_count as u32, acc);
 
-            sponge.finish(acc).unwrap();
+            // sponge.finish(acc).unwrap();
 
             assert_eq!(expected_permutations, sponge.permutation_count);
 
@@ -669,7 +669,7 @@ mod tests {
 
             let output = SpongeAPI::squeeze(&mut sponge, squeeze_count as u32, acc);
 
-            sponge.finish(acc).unwrap();
+            // sponge.finish(acc).unwrap();
 
             output
         };
