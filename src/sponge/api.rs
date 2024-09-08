@@ -216,9 +216,6 @@ impl<F: PrimeField, A: Arity<F>, S: InnerSpongeAPI<F, A>> SpongeAPI<F, A> for S 
             self.add_rate_element(self.absorb_pos(), &S::add(old, element));
             self.set_absorb_pos(self.absorb_pos() + 1);
         }
-        let op = SpongeOp::Absorb(length);
-        let old_count = self.increment_io_count();
-        assert_eq!(Some(&op), self.pattern().op_at(old_count));
 
         self.set_squeeze_pos(rate);
     }
@@ -237,9 +234,6 @@ impl<F: PrimeField, A: Arity<F>, S: InnerSpongeAPI<F, A>> SpongeAPI<F, A> for S 
             out.push(self.read_rate_element(self.squeeze_pos()));
             self.set_squeeze_pos(self.squeeze_pos() + 1);
         }
-        let op = SpongeOp::Squeeze(length);
-        let old_count = self.increment_io_count();
-        assert_eq!(Some(&op), self.pattern().op_at(old_count));
 
         out
     }

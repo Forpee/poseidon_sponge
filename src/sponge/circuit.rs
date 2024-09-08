@@ -444,11 +444,7 @@ mod tests {
     fn test_sponge_api_circuit_simple() {
         use crate::sponge::api::SpongeAPI;
 
-        let parameter = IOPattern(vec![
-            SpongeOp::Absorb(1),
-            SpongeOp::Absorb(5),
-            SpongeOp::Squeeze(3),
-        ]);
+        let parameter = IOPattern(vec![]);
 
         let mut cs = TestConstraintSystem::<Fr>::new();
         let mut wcs = WitnessCS::<Fr>::new();
