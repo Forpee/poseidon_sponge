@@ -49,7 +49,7 @@ where
         .iter()
         .map(|elt| elt.get_value().unwrap())
         .collect::<Vec<_>>();
-    let mut p = Poseidon::new_with_preimage(&scalar_preimage, constants);
+    let mut p = Poseidon::new_with_preimage(&scalar_preimage, constants.clone());
 
     p.generate_witness_into_cs(cs)
 }
@@ -78,14 +78,14 @@ where
     Scalar: PrimeField,
     A: Arity<Scalar>,
 {
-    let mut p = Poseidon::new_with_preimage(preimage, constants);
+    let mut p = Poseidon::new_with_preimage(preimage, constants.clone());
 
     let (aux, _inputs, result) = p.generate_witness();
 
     (aux, result)
 }
 
-impl<'a, Scalar, A> SizedWitness<Scalar> for Poseidon<'a, Scalar, A>
+impl<'a, Scalar, A> SizedWitness<Scalar> for Poseidon<Scalar, A>
 where
     Scalar: PrimeField,
     A: Arity<Scalar>,
@@ -106,7 +106,7 @@ where
     }
     fn generate_witness_into(&mut self, aux: &mut [Scalar], _inputs: &mut [Scalar]) -> Scalar {
         let width = A::ConstantsSize::to_usize();
-        let constants = self.constants;
+        let constants = &self.constants;
         let elements = &mut self.elements;
 
         let mut elements_buffer =
@@ -444,7 +444,7 @@ mod test {
                 dbg!(&cs_aux[220..], &wcs_aux[220..]);
                 assert_eq!(None, mismatch(&cs_aux, wcs_aux));
 
-                let mut p = Poseidon::<Fr, A>::new_with_preimage(&fr_data, &constants);
+                let mut p = Poseidon::<Fr, A>::new_with_preimage(&fr_data, constants);
                 let expected: Fr = p.hash_in_mode(HashMode::Correct);
 
                 let expected_constraints_calculated = expected_constraints_calculated + 1;

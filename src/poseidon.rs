@@ -62,7 +62,7 @@ impl_arity!(
 /// [`Poseidon`] accepts input `elements` set with length equal or less than [`Arity`].
 ///
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Poseidon<'a, F, A = U2>
+pub struct Poseidon<F, A = U2>
 where
     F: PrimeField,
     A: Arity<F>,
@@ -73,7 +73,7 @@ where
     pub elements: GenericArray<F, A::ConstantsSize>,
     /// index of the next element of state to be absorbed
     pub(crate) pos: usize,
-    pub(crate) constants: &'a PoseidonConstants<F, A>,
+    pub(crate) constants: PoseidonConstants<F, A>,
     _f: PhantomData<F>,
 }
 
@@ -377,7 +377,7 @@ where
     }
 }
 
-impl<'a, F, A> Poseidon<'a, F, A>
+impl<'a, F, A> Poseidon<F, A>
 where
     F: PrimeField,
     A: Arity<F>,
@@ -404,7 +404,7 @@ where
     ///     assert_eq!(poseidon.elements[index], Fp::ZERO);
     /// }
     /// ```
-    pub fn new(constants: &'a PoseidonConstants<F, A>) -> Self {
+    pub fn new(constants: PoseidonConstants<F, A>) -> Self {
         let elements = GenericArray::generate(|i| {
             if i == 0 {
                 constants.domain_tag
@@ -447,7 +447,7 @@ where
     /// assert_eq!(poseidon.elements[1], Fp::from(u64::MAX));
     /// assert_eq!(poseidon.elements[2], Fp::ZERO);
     /// ```
-    pub fn new_with_preimage(preimage: &[F], constants: &'a PoseidonConstants<F, A>) -> Self {
+    pub fn new_with_preimage(preimage: &[F], constants: PoseidonConstants<F, A>) -> Self {
         let elements = match constants.hash_type {
             HashType::ConstantLength(constant_len) => {
                 assert_eq!(constant_len, preimage.len(), "Invalid preimage size");
@@ -830,7 +830,7 @@ where
         let full_half = self.constants.half_full_rounds;
         let sparse_offset = full_half - 1;
         if self.current_round == sparse_offset {
-            self.product_mds_with_matrix(&self.constants.pre_sparse_matrix);
+            self.product_mds_with_matrix(&self.constants.pre_sparse_matrix.clone());
         } else {
             if (self.current_round > sparse_offset)
                 && (self.current_round < full_half + self.constants.partial_rounds)
@@ -838,7 +838,7 @@ where
                 let index = self.current_round - sparse_offset - 1;
                 let sparse_matrix = &self.constants.sparse_matrixes[index];
 
-                self.product_mds_with_sparse_matrix(sparse_matrix);
+                self.product_mds_with_sparse_matrix(&sparse_matrix.clone());
             } else {
                 self.product_mds();
             }
@@ -850,7 +850,8 @@ where
     /// Set the provided elements with the result of the product between the elements and the constant
     /// MDS matrix.
     pub(crate) fn product_mds(&mut self) {
-        self.product_mds_with_matrix_left(&self.constants.mds_matrices.m);
+        let matrix = self.constants.mds_matrices.m.clone();
+        self.product_mds_with_matrix_left(&matrix);
     }
 
     /// NOTE: This calculates a vector-matrix product (`elements * matrix`) rather than the
@@ -942,7 +943,7 @@ where
     fn hash(&mut self, preimages: &[GenericArray<F, A>]) -> Result<Vec<F>, Error> {
         Ok(preimages
             .iter()
-            .map(|preimage| Poseidon::new_with_preimage(preimage, &self.constants).hash())
+            .map(|preimage| Poseidon::new_with_preimage(preimage, self.constants.clone()).hash())
             .collect())
     }
 
@@ -968,11 +969,11 @@ mod tests {
         let test_arity = 2;
         let preimage = vec![<Fr as Field>::ONE; test_arity];
         let constants = PoseidonConstants::new();
-        let mut h = Poseidon::<Fr, U2>::new_with_preimage(&preimage, &constants);
+        let mut h = Poseidon::<Fr, U2>::new_with_preimage(&preimage, constants.clone());
         h.hash();
         h.reset();
 
-        let default = Poseidon::<Fr, U2>::new(&constants);
+        let default = Poseidon::<Fr, U2>::new(constants.clone());
         assert_eq!(default.pos, h.pos);
         assert_eq!(default.elements, h.elements);
         assert_eq!(default.constants_offset, h.constants_offset);
@@ -985,7 +986,7 @@ mod tests {
         let constants = PoseidonConstants::new();
         preimage[0] = <Fr as Field>::ONE;
 
-        let mut h = Poseidon::<Fr, U2>::new_with_preimage(&preimage, &constants);
+        let mut h = Poseidon::<Fr, U2>::new_with_preimage(&preimage, constants);
 
         let mut h2 = h.clone();
         let result = h.hash();
@@ -999,7 +1000,7 @@ mod tests {
         let constants = PoseidonConstants::new();
         preimage[0] = <Fr as Field>::ONE;
 
-        let mut h = Poseidon::<Fr, U3>::new_with_preimage(&preimage, &constants);
+        let mut h = Poseidon::<Fr, U3>::new_with_preimage(&preimage, constants);
 
         let mut h2 = h.clone();
         let result = h.hash();
@@ -1029,10 +1030,10 @@ mod tests {
         A: Arity<Fr>,
     {
         let merkle_constants = PoseidonConstants::<Fr, A>::new_with_strength(strength);
-        let mut p = Poseidon::<Fr, A>::new(&merkle_constants);
-        let mut p2 = Poseidon::<Fr, A>::new(&merkle_constants);
-        let mut p3 = Poseidon::<Fr, A>::new(&merkle_constants);
-        let mut p4 = Poseidon::<Fr, A>::new(&merkle_constants);
+        let mut p = Poseidon::<Fr, A>::new(merkle_constants.clone());
+        let mut p2 = Poseidon::<Fr, A>::new(merkle_constants.clone());
+        let mut p3 = Poseidon::<Fr, A>::new(merkle_constants.clone());
+        let mut p4 = Poseidon::<Fr, A>::new(merkle_constants);
 
         // Constant-length hashing. Should be tested with arities above, below, and equal to the length.
         let constant_length = 4;
@@ -1040,7 +1041,7 @@ mod tests {
             strength,
             HashType::ConstantLength(constant_length),
         );
-        let mut pc = Poseidon::<Fr, A>::new(&constant_constants);
+        let mut pc = Poseidon::<Fr, A>::new(constant_constants.clone());
         let test_arity = A::to_usize();
 
         for n in 0..test_arity {
@@ -1167,7 +1168,7 @@ mod tests {
             }
         };
 
-        let mut constant_sponge = Sponge::new_with_constants(&constant_constants, Mode::Simplex);
+        let mut constant_sponge = Sponge::new_with_constants(constant_constants, Mode::Simplex);
 
         let check_simple = constant_length <= test_arity;
         for n in 0..constant_length {
@@ -1288,7 +1289,7 @@ mod tests {
     #[test]
     fn hash_compare_optimized() {
         let constants = PoseidonConstants::<Fr, U2>::new();
-        let mut p = Poseidon::<Fr, U2>::new(&constants);
+        let mut p = Poseidon::<Fr, U2>::new(constants.clone());
         let test_arity = constants.arity();
         for n in 0..test_arity {
             let scalar = Fr::from(n as u64);

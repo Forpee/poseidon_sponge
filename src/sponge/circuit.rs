@@ -22,19 +22,19 @@ where
     A: Arity<F>,
     C: ConstraintSystem<F>,
 {
-    constants: &'a PoseidonConstants<F, A>,
+    constants: PoseidonConstants<F, A>,
     mode: Mode,
     direction: Direction,
     absorbed: usize,
     squeezed: usize,
     squeeze_pos: usize,
     permutation_count: usize,
-    state: PoseidonCircuit2<'a, F, A>,
+    state: PoseidonCircuit2<F, A>,
     queue: VecDeque<Elt<F>>,
     pattern: IOPattern,
     io_count: usize,
-    poseidon: Poseidon<'a, F, A>,
-    _c: PhantomData<C>,
+    poseidon: Poseidon<F, A>,
+    _c: &'a PhantomData<C>,
 }
 
 impl<'a, F: PrimeField, A: Arity<F>, CS: 'a + ConstraintSystem<F>> SpongeTrait<'a, F, A>
@@ -44,21 +44,21 @@ impl<'a, F: PrimeField, A: Arity<F>, CS: 'a + ConstraintSystem<F>> SpongeTrait<'
     type Elt = Elt<F>;
     type Error = SynthesisError;
 
-    fn new_with_constants(constants: &'a PoseidonConstants<F, A>, mode: Mode) -> Self {
+    fn new_with_constants(constants: PoseidonConstants<F, A>, mode: Mode) -> Self {
         Self {
             mode,
             direction: Direction::Absorbing,
-            constants,
+            constants: constants.clone(),
             absorbed: 0,
             squeezed: 0,
             squeeze_pos: 0,
             permutation_count: 0,
-            state: PoseidonCircuit2::new_empty::<CS>(constants),
+            state: PoseidonCircuit2::new_empty::<CS>(constants.clone()),
             queue: VecDeque::with_capacity(A::to_usize()),
             pattern: IOPattern(Vec::new()),
             poseidon: Poseidon::new(constants),
             io_count: 0,
-            _c: Default::default(),
+            _c: &PhantomData,
         }
     }
 
@@ -123,7 +123,7 @@ impl<'a, F: PrimeField, A: Arity<F>, CS: 'a + ConstraintSystem<F>> SpongeTrait<'
     }
 
     fn constants(&self) -> &PoseidonConstants<F, A> {
-        self.constants
+        &self.constants
     }
 
     fn pad(&mut self) {
@@ -275,11 +275,11 @@ mod tests {
     fn test_simplex_aux<F: PrimeField, A: Arity<F>, R: Rng>(rng: &mut R, n: usize) {
         let c = Sponge::<F, A>::simplex_constants(n);
 
-        let mut circuit = SpongeCircuit::new_with_constants(&c, Mode::Simplex);
+        let mut circuit = SpongeCircuit::new_with_constants(c.clone(), Mode::Simplex);
         let mut cs = TestConstraintSystem::<F>::new();
         let mut ns = cs.namespace(|| "ns");
 
-        let mut sponge = Sponge::new_with_constants(&c, Mode::Simplex);
+        let mut sponge = Sponge::new_with_constants(c.clone(), Mode::Simplex);
         let acc = &mut ();
 
         let mut elements = Vec::with_capacity(n);
@@ -383,11 +383,11 @@ mod tests {
     ) -> (Vec<F>, Vec<bool>) {
         let c = Sponge::<F, A>::duplex_constants();
 
-        let mut circuit = SpongeCircuit::new_with_constants(&c, Mode::Duplex);
+        let mut circuit = SpongeCircuit::new_with_constants(c.clone(), Mode::Duplex);
         let mut cs = TestConstraintSystem::<F>::new();
         let mut ns = cs.namespace(|| "ns");
 
-        let mut sponge = Sponge::new_with_constants(&c, Mode::Duplex);
+        let mut sponge = Sponge::new_with_constants(c, Mode::Duplex);
         let acc = &mut ();
 
         // Reminder: a duplex sponge should encode its length as a prefix.
@@ -451,8 +451,8 @@ mod tests {
         let circuit_output = {
             let p = Sponge::<Fr, typenum::U5>::api_constants(Strength::Standard);
 
-            let mut sponge = SpongeCircuit::new_with_constants(&p, Mode::Simplex);
-            let mut wsponge = SpongeCircuit::new_with_constants(&p, Mode::Simplex);
+            let mut sponge = SpongeCircuit::new_with_constants(p.clone(), Mode::Simplex);
+            let mut wsponge = SpongeCircuit::new_with_constants(p, Mode::Simplex);
 
             let mut ns = cs.namespace(|| "ns");
             let acc = &mut ns;
@@ -533,7 +533,7 @@ mod tests {
 
         let non_circuit_output = {
             let p = Sponge::<Fr, typenum::U5>::api_constants(Strength::Standard);
-            let mut sponge = Sponge::new_with_constants(&p, Mode::Simplex);
+            let mut sponge = Sponge::new_with_constants(p, Mode::Simplex);
             let acc = &mut ();
 
             sponge.start(parameter, None, acc);
@@ -577,7 +577,7 @@ mod tests {
 
         {
             let p = Sponge::<Fr, typenum::U5>::api_constants(Strength::Standard);
-            let mut sponge = SpongeCircuit::new_with_constants(&p, Mode::Simplex);
+            let mut sponge = SpongeCircuit::new_with_constants(p, Mode::Simplex);
             let mut cs = TestConstraintSystem::<Fr>::new();
             let mut ns = cs.namespace(|| "ns");
             let acc = &mut ns;
@@ -632,7 +632,7 @@ mod tests {
 
         let circuit_output = {
             let p = Sponge::<Fr, typenum::U5>::api_constants(Strength::Standard);
-            let mut sponge = SpongeCircuit::new_with_constants(&p, Mode::Simplex);
+            let mut sponge = SpongeCircuit::new_with_constants(p, Mode::Simplex);
             let mut cs = TestConstraintSystem::<Fr>::new();
             let mut ns = cs.namespace(|| "ns");
             let acc = &mut ns;
@@ -657,7 +657,7 @@ mod tests {
 
         let non_circuit_output = {
             let p = Sponge::<Fr, typenum::U5>::api_constants(Strength::Standard);
-            let mut sponge = Sponge::new_with_constants(&p, Mode::Simplex);
+            let mut sponge = Sponge::new_with_constants(p, Mode::Simplex);
             let acc = &mut ();
 
             let elts: Vec<_> = std::iter::repeat(Fr::from(123))
@@ -688,7 +688,7 @@ mod tests {
         fn synthesize<CS: ConstraintSystem<F>>(self, cs: &mut CS) -> Result<(), SynthesisError> {
             use crate::sponge::api::SpongeAPI;
 
-            let mut sponge = SpongeCircuit::<F, A, _>::new_with_constants(&self.p, Mode::Simplex);
+            let mut sponge = SpongeCircuit::<F, A, _>::new_with_constants(self.p, Mode::Simplex);
             let mut ns = cs.namespace(|| "ns");
 
             let a1 = AllocatedNum::alloc_infallible(&mut ns.namespace(|| "a1"), || F::from(1));

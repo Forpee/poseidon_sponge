@@ -140,7 +140,7 @@ impl<Scalar: PrimeField> Elt<Scalar> {
 }
 
 /// Circuit for Poseidon hash.
-pub struct PoseidonCircuit2<'a, Scalar, A>
+pub struct PoseidonCircuit2<Scalar, A>
 where
     Scalar: PrimeField,
     A: Arity<Scalar>,
@@ -150,18 +150,18 @@ where
     pub(crate) elements: Vec<Elt<Scalar>>,
     pub(crate) pos: usize,
     current_round: usize,
-    constants: &'a PoseidonConstants<Scalar, A>,
+    constants: PoseidonConstants<Scalar, A>,
     _w: PhantomData<A>,
 }
 
 /// PoseidonCircuit2 implementation.
-impl<'a, Scalar, A> PoseidonCircuit2<'a, Scalar, A>
+impl<'a, Scalar, A> PoseidonCircuit2<Scalar, A>
 where
     Scalar: PrimeField,
     A: Arity<Scalar>,
 {
     /// Create a new Poseidon hasher for `preimage`.
-    pub fn new(elements: Vec<Elt<Scalar>>, constants: &'a PoseidonConstants<Scalar, A>) -> Self {
+    pub fn new(elements: Vec<Elt<Scalar>>, constants: PoseidonConstants<Scalar, A>) -> Self {
         let width = constants.width();
 
         PoseidonCircuit2 {
@@ -176,7 +176,7 @@ where
     }
 
     pub fn new_empty<CS: ConstraintSystem<Scalar>>(
-        constants: &'a PoseidonConstants<Scalar, A>,
+        constants: PoseidonConstants<Scalar, A>,
     ) -> Self {
         let elements = Self::initial_elements::<CS>();
         Self::new(elements, constants)
@@ -336,7 +336,7 @@ where
     }
 
     fn product_mds_m<CS: ConstraintSystem<Scalar>>(&mut self) -> Result<(), SynthesisError> {
-        self.product_mds_with_matrix::<CS>(&self.constants.mds_matrices.m)
+        self.product_mds_with_matrix::<CS>(&self.constants.mds_matrices.m.clone())
     }
 
     /// Set the provided elements with the result of the product between the elements and the appropriate
@@ -346,7 +346,7 @@ where
         let full_half = self.constants.half_full_rounds;
         let sparse_offset = full_half - 1;
         if self.current_round == sparse_offset {
-            self.product_mds_with_matrix::<CS>(&self.constants.pre_sparse_matrix)?;
+            self.product_mds_with_matrix::<CS>(&self.constants.pre_sparse_matrix.clone())?;
         } else {
             if (self.current_round > sparse_offset)
                 && (self.current_round < full_half + self.constants.partial_rounds)
@@ -354,7 +354,7 @@ where
                 let index = self.current_round - sparse_offset - 1;
                 let sparse_matrix = &self.constants.sparse_matrixes[index];
 
-                self.product_mds_with_sparse_matrix::<CS>(sparse_matrix)?;
+                self.product_mds_with_sparse_matrix::<CS>(&sparse_matrix.clone())?;
             } else {
                 self.product_mds_m::<CS>()?;
             }
@@ -448,7 +448,7 @@ where
 {
     if cs.is_witness_generator() {
         let mut cs = cs;
-        poseidon_hash_allocated_witness(&mut cs, &preimage, constants)
+        poseidon_hash_allocated_witness(&mut cs, &preimage, &constants)
     } else {
         let arity = A::to_usize();
         let tag_element = Elt::num_from_fr::<CS>(constants.domain_tag);
@@ -464,7 +464,7 @@ where
                 elements.push(elt);
             }
         }
-        let mut p = PoseidonCircuit2::new(elements, constants);
+        let mut p = PoseidonCircuit2::new(elements, constants.clone());
 
         p.hash_to_allocated(cs)
     }
@@ -496,7 +496,7 @@ where
         }
     }
 
-    let mut p = PoseidonCircuit2::new(elements, constants);
+    let mut p = PoseidonCircuit2::new(elements, constants.clone());
 
     p.hash_to_num(cs)
 }
@@ -748,7 +748,7 @@ mod tests {
                 let out = poseidon_hash_allocated(&mut cs, data.clone(), &constants)
                     .expect("poseidon hashing failed");
 
-                let mut p = Poseidon::<Fr, A>::new_with_preimage(&fr_data, &constants);
+                let mut p = Poseidon::<Fr, A>::new_with_preimage(&fr_data, constants.clone());
                 let expected: Fr = p.hash_in_mode(HashMode::Correct);
 
                 let expected_constraints_calculated = expected_constraints_calculated + 1;
@@ -783,7 +783,7 @@ mod tests {
                 let out =
                     poseidon_hash_num(&mut cs, data, &constants).expect("poseidon hashing failed");
 
-                let mut p = Poseidon::<Fr, A>::new_with_preimage(&fr_data, &constants);
+                let mut p = Poseidon::<Fr, A>::new_with_preimage(&fr_data, constants);
                 let expected: Fr = p.hash_in_mode(HashMode::Correct);
 
                 assert!(cs.is_satisfied(), "constraints not satisfied");

@@ -48,10 +48,10 @@ pub enum Direction {
     Squeezing,
 }
 
-pub struct Sponge<'a, F: PrimeField, A: Arity<F>> {
+pub struct Sponge<F: PrimeField, A: Arity<F>> {
     absorbed: usize,
     squeezed: usize,
-    pub state: Poseidon<'a, F, A>,
+    pub state: Poseidon<F, A>,
     mode: Mode,
     direction: Direction,
     squeeze_pos: usize,
@@ -68,7 +68,7 @@ where
     type Elt;
     type Error;
 
-    fn new_with_constants(constants: &'a PoseidonConstants<F, A>, mode: Mode) -> Self;
+    fn new_with_constants(constants: PoseidonConstants<F, A>, mode: Mode) -> Self;
 
     fn simplex_constants(size: usize) -> PoseidonConstants<F, A> {
         PoseidonConstants::new_constant_length(size)
@@ -299,12 +299,12 @@ where
     fn squeeze_elements(&mut self, count: usize, acc: &mut Self::Acc) -> Vec<Self::Elt>;
 }
 
-impl<'a, F: PrimeField, A: Arity<F>> SpongeTrait<'a, F, A> for Sponge<'a, F, A> {
+impl<'a, F: PrimeField, A: Arity<F>> SpongeTrait<'a, F, A> for Sponge<F, A> {
     type Acc = ();
     type Elt = F;
     type Error = Error;
 
-    fn new_with_constants(constants: &'a PoseidonConstants<F, A>, mode: Mode) -> Self {
+    fn new_with_constants(constants: PoseidonConstants<F, A>, mode: Mode) -> Self {
         let poseidon = Poseidon::new(constants);
 
         Self {
@@ -378,7 +378,7 @@ impl<'a, F: PrimeField, A: Arity<F>> SpongeTrait<'a, F, A> for Sponge<'a, F, A> 
     }
 
     fn constants(&self) -> &PoseidonConstants<F, A> {
-        self.state.constants
+        &self.state.constants
     }
 
     fn pad(&mut self) {
@@ -420,7 +420,7 @@ impl<'a, F: PrimeField, A: Arity<F>> SpongeTrait<'a, F, A> for Sponge<'a, F, A> 
     }
 }
 
-impl<F: PrimeField, A: Arity<F>> Iterator for Sponge<'_, F, A> {
+impl<F: PrimeField, A: Arity<F>> Iterator for Sponge<F, A> {
     type Item = F;
 
     fn next(&mut self) -> Option<F> {
@@ -435,7 +435,7 @@ impl<F: PrimeField, A: Arity<F>> Iterator for Sponge<'_, F, A> {
     }
 }
 
-impl<F: PrimeField, A: Arity<F>> InnerSpongeAPI<F, A> for Sponge<'_, F, A> {
+impl<F: PrimeField, A: Arity<F>> InnerSpongeAPI<F, A> for Sponge<F, A> {
     type Acc = ();
     type Value = F;
 
@@ -519,7 +519,7 @@ mod tests {
 
     fn test_simplex_aux<F: PrimeField, A: Arity<F>, R: Rng>(rng: &mut R, n: usize) {
         let c = Sponge::<F, A>::simplex_constants(n);
-        let mut sponge = Sponge::new_with_constants(&c, Mode::Simplex);
+        let mut sponge = Sponge::new_with_constants(c, Mode::Simplex);
 
         let mut elements: Vec<F> = Vec::with_capacity(n);
         for _ in 0..n {
@@ -595,7 +595,7 @@ mod tests {
         n: usize,
     ) -> (Vec<F>, Vec<bool>) {
         let c = Sponge::<F, A>::duplex_constants();
-        let mut sponge = Sponge::new_with_constants(&c, Mode::Duplex);
+        let mut sponge = Sponge::new_with_constants(c, Mode::Duplex);
         let acc = &mut ();
 
         // Reminder: a duplex sponge should encode its length as a prefix.
@@ -631,7 +631,7 @@ mod tests {
 
         {
             let p = Sponge::<Fr, typenum::U5>::api_constants(Strength::Standard);
-            let mut sponge = Sponge::new_with_constants(&p, Mode::Simplex);
+            let mut sponge = Sponge::new_with_constants(p, Mode::Simplex);
             let acc = &mut ();
 
             sponge.start(parameter, None, acc);
@@ -649,7 +649,7 @@ mod tests {
                 acc,
             );
 
-            let output = SpongeAPI::squeeze(&mut sponge, 3, acc);
+            let _ = SpongeAPI::squeeze(&mut sponge, 3, acc);
 
             sponge.finish(acc).unwrap();
         }
@@ -668,7 +668,7 @@ mod tests {
 
         {
             let p = Sponge::<Fr, typenum::U5>::api_constants(Strength::Standard);
-            let mut sponge = Sponge::new_with_constants(&p, Mode::Simplex);
+            let mut sponge = Sponge::new_with_constants(p, Mode::Simplex);
             let acc = &mut ();
 
             sponge.start(parameter, None, acc);
